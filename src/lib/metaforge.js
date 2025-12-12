@@ -18,7 +18,7 @@ async function fetchCachedJson(url, ttlMs = 5 * 60 * 1000) {
   try {
     const res = await fetch(url, {
       headers: {
-        "User-Agent": "ARC-Raiders-DiscordBot/1.0",
+        "User-Agent": "ARC-Raiders-DiscordBot/1.1",
         "Accept": "application/json"
       }
     });
@@ -26,7 +26,6 @@ async function fetchCachedJson(url, ttlMs = 5 * 60 * 1000) {
     const contentType = res.headers.get("content-type") || "";
     const raw = await res.text();
 
-    // Non-JSON (HTML/WAF/etc)
     if (!contentType.includes("application/json")) {
       const out = {
         success: false,
@@ -54,7 +53,6 @@ async function fetchCachedJson(url, ttlMs = 5 * 60 * 1000) {
       return out;
     }
 
-    // If HTTP status is not OK, bubble up the JSON message
     if (!res.ok) {
       const out = {
         success: false,
@@ -67,15 +65,11 @@ async function fetchCachedJson(url, ttlMs = 5 * 60 * 1000) {
       return out;
     }
 
-    // Ensure we always have a boolean success
-    if (typeof json.success !== "boolean") {
-      json.success = true;
-    }
+    if (typeof json.success !== "boolean") json.success = true;
 
     set(url, json, ttlMs);
     return json;
   } catch (err) {
-    // Network/DNS/TLS/fetch failed, etc.
     const out = {
       success: false,
       status: "fetch_failed",
@@ -87,11 +81,12 @@ async function fetchCachedJson(url, ttlMs = 5 * 60 * 1000) {
   }
 }
 
+// Full-list endpoints (cached), then we search/paginate locally (lowest resistance + API-friendly)
 module.exports = {
-  items: (params = {}) => fetchCachedJson(buildUrl("/api/arc-raiders/items", params), 30 * 60 * 1000),
-  arcs: (params = {}) => fetchCachedJson(buildUrl("/api/arc-raiders/arcs", params), 30 * 60 * 1000),
-  quests: (params = {}) => fetchCachedJson(buildUrl("/api/arc-raiders/quests", params), 30 * 60 * 1000),
+  items: () => fetchCachedJson(buildUrl("/api/arc-raiders/items"), 30 * 60 * 1000),
+  arcs: () => fetchCachedJson(buildUrl("/api/arc-raiders/arcs"), 30 * 60 * 1000),
+  quests: () => fetchCachedJson(buildUrl("/api/arc-raiders/quests"), 30 * 60 * 1000),
   traders: () => fetchCachedJson(buildUrl("/api/arc-raiders/traders"), 30 * 60 * 1000),
-  events: (params = {}) => fetchCachedJson(buildUrl("/api/arc-raiders/event-timers", params), 60 * 1000),
-  map: (params = {}) => fetchCachedJson(buildUrl("/api/game-map-data", params), 30 * 60 * 1000)
+  events: () => fetchCachedJson(buildUrl("/api/arc-raiders/event-timers"), 60 * 1000),
+  map: () => fetchCachedJson(buildUrl("/api/game-map-data"), 30 * 60 * 1000)
 };

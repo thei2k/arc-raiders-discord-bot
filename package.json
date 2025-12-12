@@ -1,7 +1,7 @@
 {
   "name": "arc-raiders-discord-bot",
-  "version": "1.0.0",
-  "description": "Discord bot for ARC Raiders using MetaForge API",
+  "version": "1.1.0",
+  "description": "Discord bot for ARC Raiders using MetaForge API (community maintained)",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
