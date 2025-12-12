@@ -1,46 +1,59 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const api = require("../lib/metaforge");
-const { clamp, toSearchString, pick } = require("../lib/format");
+const { clamp, pick } = require("../lib/format");
 const { createPager, registerRenderer } = require("../lib/paginator");
 
-function filterList(list, q) {
-  if (!q) return list;
-  const qq = q.toLowerCase();
-  return list.filter(x => toSearchString(x).includes(qq));
+function clampInt(n, min, max, fallback) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return fallback;
+  return Math.max(min, Math.min(max, Math.floor(x)));
 }
 
 function nameOf(x) {
-  return pick(x, ["name", "title"]) ?? "Unknown";
+  return (
+    pick(x, ["name", "title", "displayName", "itemName", "label", "slug", "id"]) ??
+    "Unknown"
+  );
 }
 
 async function render(interaction, state) {
-  const json = await api.items();
+  const q = (state.q || "").trim();
+  const page = clampInt(state.page, 1, 10_000, 1);
+  const limit = clampInt(state.perPage, 1, 100, 10);
+
+  // Use API pagination + search by name
+  const json = await api.items({
+    page,
+    limit,
+    search: q || undefined,
+    // You can flip these later if you want richer data:
+    minimal: true,
+    includeComponents: false,
+  });
+
   if (!json?.success) {
     const msg = `API error\nstatus: ${json?.status}\nerror: ${json?.error}\nurl: ${json?.url}`;
     return interaction.editReply("```" + msg.slice(0, 1800) + "```");
   }
 
-  const all = Array.isArray(json.data) ? json.data : [];
-  const filtered = filterList(all, state.q);
-
-  const perPage = clamp(state.perPage ?? 10, 5, 20);
-  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
-  const page = clamp(state.page ?? 1, 1, totalPages);
-
-  const start = (page - 1) * perPage;
-  const chunk = filtered.slice(start, start + perPage);
+  const items = Array.isArray(json.data) ? json.data : [];
+  const pag = json.pagination || {};
+  const totalPages = clampInt(pag.totalPages, 1, 10_000, 1);
+  const total = clampInt(pag.total, 0, 1_000_000, items.length);
 
   const embed = new EmbedBuilder()
     .setTitle("Items")
     .setDescription(
-      chunk.length
-        ? chunk.map((it, idx) => `**${start + idx + 1}.** ${nameOf(it)}`).join("\n")
+      items.length
+        ? items.map((it, idx) => `**${idx + 1}.** ${nameOf(it)}`).join("\n")
         : "No items found."
     )
-    .setFooter({ text: `Query: ${state.q || "(none)"} • Page ${page}/${totalPages} • ${filtered.length} results` });
+    .setFooter({
+      text: `Query: ${q || "(none)"} • Page ${page}/${totalPages} • ${total} total`,
+    });
 
   const pager = createPager(
-    { renderFnName: "items_render", q: state.q || "", perPage },
+    { renderFnName: "items_render", q, perPage: limit },
     page,
     totalPages
   );
@@ -53,10 +66,16 @@ registerRenderer("items_render", render);
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("items")
-    .setDescription("Search and browse items")
-    .addStringOption(o => o.setName("q").setDescription("Search text").setRequired(false))
-    .addIntegerOption(o => o.setName("perpage").setDescription("Items per page (5-20)").setRequired(false))
-    .addIntegerOption(o => o.setName("page").setDescription("Page number").setRequired(false)),
+    .setDescription("Search and browse items (server-side paging)")
+    .addStringOption((o) =>
+      o.setName("q").setDescription("Search by item name").setRequired(false)
+    )
+    .addIntegerOption((o) =>
+      o.setName("perpage").setDescription("Items per page (1-100)").setRequired(false)
+    )
+    .addIntegerOption((o) =>
+      o.setName("page").setDescription("Page number").setRequired(false)
+    ),
 
   async execute(interaction) {
     await interaction.deferReply();
@@ -64,5 +83,5 @@ module.exports = {
     const perPage = interaction.options.getInteger("perpage") ?? 10;
     const page = interaction.options.getInteger("page") ?? 1;
     return render(interaction, { q, perPage, page });
-  }
+  },
 };
