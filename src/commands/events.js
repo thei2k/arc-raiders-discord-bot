@@ -1,4 +1,3 @@
-// src/commands/events.js
 const { SlashCommandBuilder } = require("discord.js");
 const api = require("../lib/metaforge");
 
@@ -14,24 +13,14 @@ module.exports = {
 
     if (!json?.success) {
       const msg =
-        `API error.\n` +
-        `Status: ${json?.status ?? "unknown"}\n` +
-        `Error: ${json?.error ?? "unknown"}\n` +
-        `URL: ${json?.url ?? "unknown"}`;
+        `API error\n` +
+        `status: ${json?.status ?? "unknown"}\n` +
+        `error: ${json?.error ?? "unknown"}\n` +
+        `url: ${json?.url ?? "unknown"}\n` +
+        (json?.preview ? `preview: ${json.preview}\n` : "");
       return interaction.editReply("```" + msg.slice(0, 1800) + "```");
     }
 
-    // Try to display something useful regardless of exact shape:
-    const data = json.data;
-    const preview =
-      Array.isArray(data) ? data.slice(0, 5) :
-      data && typeof data === "object" ? Object.keys(data).slice(0, 10) :
-      [];
-
-    return interaction.editReply(
-      preview.length
-        ? `Got event timers. Preview: ${preview.join(", ").slice(0, 1800)}`
-        : "Got event timers."
-    );
+    return interaction.editReply("✅ Event timers fetched successfully.");
   }
 };

@@ -3,6 +3,12 @@ const fs = require("fs");
 const path = require("path");
 const { Client, Collection, GatewayIntentBits, REST, Routes } = require("discord.js");
 
+// Polyfill fetch if missing (Railway/runtime safety)
+if (typeof globalThis.fetch !== "function") {
+  const { fetch } = require("undici");
+  globalThis.fetch = fetch;
+}
+
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
 const GUILD_ID = process.env.DISCORD_GUILD_ID;
@@ -13,7 +19,7 @@ if (!TOKEN || !CLIENT_ID) {
 }
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
+  intents: [GatewayIntentBits.Guilds],
 });
 
 client.commands = new Collection();
@@ -29,28 +35,22 @@ for (const file of fs.readdirSync(commandsPath)) {
 
 const rest = new REST({ version: "10" }).setToken(TOKEN);
 
-(async () => {
+async function registerCommands() {
+  console.log("Registering slash commands...");
   try {
-    console.log("Registering slash commands...");
     if (GUILD_ID) {
-      await rest.put(
-        Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-        { body: commands }
-      );
+      await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), { body: commands });
       console.log("Registered guild commands");
     } else {
-      await rest.put(
-        Routes.applicationCommands(CLIENT_ID),
-        { body: commands }
-      );
+      await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
       console.log("Registered global commands");
     }
   } catch (err) {
     console.error("Command registration failed:", err);
   }
-})();
+}
 
-client.on("interactionCreate", async interaction => {
+client.on("interactionCreate", async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
   const command = client.commands.get(interaction.commandName);
   if (!command) return;
@@ -58,17 +58,19 @@ client.on("interactionCreate", async interaction => {
   try {
     await command.execute(interaction);
   } catch (err) {
-    console.error(err);
+    console.error("Command execute error:", err);
     if (interaction.deferred || interaction.replied) {
-      interaction.editReply("There was an error executing this command.");
+      await interaction.editReply("There was an error executing this command.");
     } else {
-      interaction.reply({ content: "There was an error executing this command.", ephemeral: true });
+      await interaction.reply({ content: "There was an error executing this command.", ephemeral: true });
     }
   }
 });
 
-client.once("ready", () => {
+client.once("ready", async () => {
+  console.log("Node version:", process.version);
   console.log(`Logged in as ${client.user.tag}`);
+  await registerCommands();
 });
 
 client.login(TOKEN);
